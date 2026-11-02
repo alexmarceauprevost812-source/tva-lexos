@@ -22,6 +22,7 @@ internal object ReseauRiche {
         "geocoding-api.open-meteo.com",
         "api.open-meteo.com",
         "api.coingecko.com",
+        "api.github.com",
     )
 
     fun autorisee(url: String): Boolean = runCatching {
