@@ -15,6 +15,12 @@ class DrawerAdapter(
     private val onAction: (DrawerItem) -> Unit
 ) : RecyclerView.Adapter<DrawerAdapter.Holder>() {
 
+    /** Couleur des titres de rubrique (TVA LexOS : la couleur des yeux). */
+    var accent: Int = 0xFFFF7A00.toInt()
+
+    /** Couleur des boutons du menu ; null = même couleur que [accent]. */
+    var couleurBouton: Int? = null
+
     class Holder(val binding: ItemDrawerBinding) : RecyclerView.ViewHolder(binding.root)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): Holder =
@@ -48,7 +54,7 @@ class DrawerAdapter(
         when (item) {
             is DrawerItem.Section -> {
                 b.titre.text = item.titre.uppercase()
-                b.titre.setTextColor(0xFFFF7A00.toInt())
+                b.titre.setTextColor(accent)
                 b.titre.textSize = 12f
                 b.titre.setTypeface(null, android.graphics.Typeface.BOLD)
                 if (item.action != null) {
@@ -106,7 +112,7 @@ class DrawerAdapter(
 
             is DrawerItem.Bouton -> {
                 b.titre.text = item.libelle
-                b.titre.setTextColor(0xFFFF7A00.toInt())
+                b.titre.setTextColor(couleurBouton ?: accent)
                 b.root.setOnClickListener { onAction(item) }
             }
         }

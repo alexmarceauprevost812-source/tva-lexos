@@ -16,6 +16,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.SimpleItemAnimator
@@ -184,6 +185,7 @@ class MainActivity : AppCompatActivity() {
         tiroirAdapter = DrawerAdapter(itemsTiroir, ::surLigneTiroir, ::surActionTiroir)
         binding.listeTiroir.layoutManager = LinearLayoutManager(this)
         binding.listeTiroir.adapter = tiroirAdapter
+        if (BuildConfig.PERSO) appliquerCouleurPerso()
         ouvrirSessionOuCreer()
         rafraichirTiroir()
         configurerBoutonsMode()
@@ -223,6 +225,10 @@ class MainActivity : AppCompatActivity() {
         appliquerFond()
         binding.yeuxBarre.appliquerReglages()
         binding.logoAccueil.appliquerReglages()
+        if (BuildConfig.PERSO) {
+            appliquerCouleurPerso()
+            majAvatar()
+        }
         refreshStatus()
         verifierProjetActif()
     }
@@ -453,6 +459,12 @@ class MainActivity : AppCompatActivity() {
         adapter.chatMode = isChat
         adapter.notifyDataSetChanged()
         updateSendIcon()
+        if (BuildConfig.PERSO) {
+            // TVA LexOS : titre blanc, et tout le reste suit la couleur des yeux.
+            binding.toolbar.setTitleTextColor(getColor(R.color.white))
+            binding.input.hint = "Discute avec TVA LexOS…"
+            appliquerCouleurPerso()
+        }
     }
 
     /** Anneau autour du bouton du mode actif, bouton un peu estompe sinon. */
@@ -467,6 +479,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateSendIcon() {
+        if (BuildConfig.PERSO) {
+            // Rond de la couleur des yeux (gris tant qu'il n'y a rien à envoyer), flèche noire.
+            val pret = isGenerating || !binding.input.text.isNullOrBlank()
+            binding.send.setImageResource(if (isGenerating) R.drawable.ic_stop_black_24 else R.drawable.ic_send_black_24)
+            binding.send.imageTintList = ColorStateList.valueOf(if (pret) 0xFF000000.toInt() else getColor(R.color.grey_dark))
+            binding.send.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(if (pret) accentPerso() else 0xFF26262A.toInt())
+            }
+            binding.send.contentDescription = getString(if (isGenerating) R.string.stop else R.string.send)
+            return
+        }
+        binding.send.setPadding(0, 0, 0, 0)
         val drawable = when {
             isGenerating && prefs.assistantMode == AssistantMode.CHAT ->
                 R.drawable.ic_stop_circle_blue
@@ -499,54 +524,7 @@ class MainActivity : AppCompatActivity() {
      * modèles partagés avec CodexLocal.
      */
     private fun installerPerso(premierLancement: Boolean) {
-        val accueil = binding.logoAccueil.parent as? android.widget.LinearLayout
-        if (accueil != null) {
-            (0 until accueil.childCount).map { accueil.getChildAt(it) }
-                .filterIsInstance<android.widget.TextView>()
-                .firstOrNull { it.text.toString() == getString(R.string.app_name) }
-                ?.text = "TVA LexOS"
-            (0 until accueil.childCount).map { accueil.getChildAt(it) }
-                .filterIsInstance<android.widget.TextView>()
-                .firstOrNull { it.text.toString() == getString(R.string.empty_subtitle) }
-                ?.text = "Ton assistant IA local : recherche, nouvelles, météo, agenda — fonctionne aussi sans réseau"
-            val d = resources.displayMetrics.density
-            fun pastille(texte: String, couleur: Int, action: () -> Unit) = android.widget.TextView(this).apply {
-                text = texte
-                textSize = 14f
-                setTextColor(couleur)
-                gravity = android.view.Gravity.CENTER
-                setPadding((14 * d).toInt(), (9 * d).toInt(), (14 * d).toInt(), (9 * d).toInt())
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    cornerRadius = 22 * d
-                    setColor(0xFF0E0E0E.toInt())
-                    setStroke((1.5f * d).toInt(), couleur)
-                }
-                setOnClickListener { action() }
-            }
-            fun rangee(vararg vues: android.view.View) = android.widget.LinearLayout(this).apply {
-                orientation = android.widget.LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER
-                vues.forEach {
-                    addView(it, android.widget.LinearLayout.LayoutParams(-2, -2).apply {
-                        setMargins((4 * d).toInt(), (5 * d).toInt(), (4 * d).toInt(), (5 * d).toInt())
-                    })
-                }
-            }
-            val orange = getColor(R.color.orange)
-            val bleu = getColor(R.color.sky_blue)
-            accueil.addView(rangee(
-                pastille("⬇️ IA gratuite", orange) { openSettings() },
-                pastille("🔑 Clé API", bleu) { openSettings() },
-                pastille("🔄 Mise à jour", orange) { checkUpdates() },
-            ), android.widget.LinearLayout.LayoutParams(-1, -2).apply { topMargin = (18 * d).toInt() })
-            binding.logoAccueil.setOnLongClickListener { choisirCouleurYeux(); true }
-            binding.yeuxBarre.setOnLongClickListener { choisirCouleurYeux(); true }
-            accueil.addView(rangee(
-                pastille("👀 Yeux", orange) { choisirCouleurYeux() },
-                pastille("📅 Agenda", orange) { startActivity(Intent(this, AgendaActivity::class.java)) },
-                pastille("🧰 Outils", bleu) { startActivity(Intent(this, OutilsActivity::class.java)) },
-            ))
-        }
+        installerInterfacePerso()
 
         if (!OutilsActivity.accordDemande(this)) OutilsActivity.demanderAccordRecherche(this)
         if (premierLancement && OutilsActivity.prenom(this).isBlank()) OutilsActivity.demanderPrenom(this)
@@ -577,6 +555,235 @@ class MainActivity : AppCompatActivity() {
                 .setNegativeButton("Plus tard", null)
                 .show()
         }
+    }
+
+    // ------------------------------------------------- interface TVA LexOS
+
+    /** Couleur d'accent : celle des yeux (les boutons changent avec les yeux). */
+    private fun accentPerso(): Int = YeuxDemon.couleurDe(prefs.yeuxCouleur)
+
+    private val ongletsPerso = mutableListOf<Pair<android.widget.LinearLayout, View>>()
+    private var rangeeCouleurs: android.widget.LinearLayout? = null
+
+    private fun dp(v: Float) = (v * resources.displayMetrics.density).toInt()
+
+    /**
+     * Accueil épuré : en-tête « menu · titre · avatar », les yeux au centre, des pastilles pour
+     * changer leur couleur, la grande zone de saisie et la barre d'onglets du bas.
+     */
+    private fun installerInterfacePerso() {
+        binding.toolbar.title = "TVA LexOS"
+        binding.toolbar.setTitleTextColor(getColor(R.color.white))
+        binding.yeuxBarre.visibility = View.GONE
+        binding.ligneHaut.visibility = View.GONE
+        binding.ligneBas.visibility = View.GONE
+        binding.toolbar.menu.findItem(R.id.action_mode_chat)?.isVisible = false
+        binding.status.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        binding.status.gravity = android.view.Gravity.CENTER
+
+        // Avatar : initiale du prénom ; un appui ouvre le petit menu du profil.
+        binding.avatarBoite.visibility = View.VISIBLE
+        binding.avatarBoite.setOnClickListener { menuProfil() }
+        binding.avatar.setOnClickListener { menuProfil() }
+        majAvatar()
+
+        // Accueil : seulement les yeux, puis les pastilles de couleur.
+        val accueil = binding.logoAccueil.parent as? android.widget.LinearLayout
+        if (accueil != null) {
+            (0 until accueil.childCount).map { accueil.getChildAt(it) }
+                .filter { it !== binding.logoAccueil }
+                .forEach { it.visibility = View.GONE }
+            binding.logoAccueil.layoutParams = binding.logoAccueil.layoutParams.apply {
+                width = dp(240f); height = dp(104f)
+            }
+            binding.logoAccueil.setOnLongClickListener { choisirCouleurYeux(); true }
+            val rangee = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER
+                setPadding(dp(8f), dp(6f), dp(8f), dp(6f))
+            }
+            YeuxDemon.COULEURS.forEach { c ->
+                val pastille = View(this).apply {
+                    tag = c.cle
+                    contentDescription = "Yeux : " + c.nom
+                    setOnClickListener { changerCouleurYeux(c.cle) }
+                }
+                rangee.addView(pastille, android.widget.LinearLayout.LayoutParams(dp(26f), dp(26f)).apply {
+                    setMargins(dp(5f), dp(4f), dp(5f), dp(4f))
+                })
+            }
+            rangeeCouleurs = rangee
+            val defile = android.widget.HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(rangee)
+            }
+            accueil.addView(defile, android.widget.LinearLayout.LayoutParams(-2, -2).apply {
+                topMargin = dp(28f)
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+            })
+        }
+
+        // Le bouton envoyer s'allume dès qu'il y a du texte.
+        binding.input.doAfterTextChanged { updateSendIcon() }
+        binding.input.hint = "Discute avec TVA LexOS…"
+
+        installerOnglets()
+        appliquerCouleurPerso()
+    }
+
+    private fun installerOnglets() {
+        val barre = binding.barreOnglets
+        barre.removeAllViews()
+        ongletsPerso.clear()
+        binding.ligneOnglets.visibility = View.VISIBLE
+        barre.visibility = View.VISIBLE
+        val onglets = listOf(
+            Triple<String, Int, () -> Unit>("Discussion", R.drawable.ic_onglet_discussion, { binding.drawerLayout.closeDrawers(); scrollToEnd() }),
+            Triple<String, Int, () -> Unit>("Agenda", R.drawable.ic_onglet_agenda, { startActivity(Intent(this, AgendaActivity::class.java)) }),
+            Triple<String, Int, () -> Unit>("Modèles", R.drawable.ic_onglet_modeles, { afficherModelesInstalles() }),
+            Triple<String, Int, () -> Unit>("Outils", R.drawable.ic_onglet_outils, { startActivity(Intent(this, OutilsActivity::class.java)) }),
+        )
+        onglets.forEachIndexed { i, (nom, icone, action) ->
+            val colonne = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                gravity = android.view.Gravity.CENTER_HORIZONTAL
+                isClickable = true
+                isFocusable = true
+                contentDescription = nom
+                setPadding(0, 0, 0, dp(8f))
+                setOnClickListener { action() }
+            }
+            val trait = View(this)
+            colonne.addView(trait, android.widget.LinearLayout.LayoutParams(dp(34f), dp(3f)).apply {
+                bottomMargin = dp(8f)
+            })
+            colonne.addView(android.widget.ImageView(this).apply {
+                setImageResource(icone)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, android.widget.LinearLayout.LayoutParams(dp(28f), dp(28f)))
+            colonne.addView(TextView(this).apply {
+                text = nom
+                textSize = 13f
+                setPadding(0, dp(3f), 0, 0)
+            })
+            barre.addView(colonne, android.widget.LinearLayout.LayoutParams(0, -2, 1f))
+            ongletsPerso += colonne to trait
+            if (i == 0) colonne.tag = true
+        }
+    }
+
+    /** Peint l'accent (couleur des yeux) partout : onglets, envoyer, pastilles, tiroir. */
+    private fun appliquerCouleurPerso() {
+        if (!BuildConfig.PERSO) return
+        val accent = accentPerso()
+        val gris = getColor(R.color.grey)
+        ongletsPerso.forEach { (colonne, trait) ->
+            val actif = colonne.tag == true
+            trait.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(2f).toFloat()
+                setColor(if (actif) accent else android.graphics.Color.TRANSPARENT)
+            }
+            val teinte = if (actif) getColor(R.color.white) else gris
+            (colonne.getChildAt(1) as? android.widget.ImageView)?.imageTintList = ColorStateList.valueOf(teinte)
+            (colonne.getChildAt(2) as? TextView)?.apply {
+                setTextColor(teinte)
+                setTypeface(null, if (actif) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+        }
+        rangeeCouleurs?.let { rangee ->
+            (0 until rangee.childCount).map { rangee.getChildAt(it) }.forEach { v ->
+                val cle = v.tag as? String ?: return@forEach
+                val choisie = cle == prefs.yeuxCouleur
+                v.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    if (cle == YeuxDemon.ARC_EN_CIEL) {
+                        colors = intArrayOf(0xFFFF2A2A.toInt(), 0xFFFFE14D.toInt(), 0xFF00E676.toInt(), 0xFF38BDF8.toInt(), 0xFFA855F7.toInt())
+                        gradientType = android.graphics.drawable.GradientDrawable.SWEEP_GRADIENT
+                    } else {
+                        setColor(YeuxDemon.couleurDe(cle))
+                    }
+                    if (choisie) setStroke(dp(3f), getColor(R.color.white))
+                }
+                v.scaleX = if (choisie) 1.15f else 1f
+                v.scaleY = v.scaleX
+            }
+        }
+        binding.nomTiroir.setTextColor(accent)
+        binding.avatarPastille.backgroundTintList = ColorStateList.valueOf(accent)
+        binding.avatar.backgroundTintList = null
+        binding.status.setTextColor(accent)
+        binding.yeuxTiroir.appliquerReglages()
+        if (::tiroirAdapter.isInitialized) {
+            tiroirAdapter.accent = accent
+            tiroirAdapter.couleurBouton = 0xFFEDEDED.toInt()
+            tiroirAdapter.notifyDataSetChanged()
+        }
+        updateSendIcon()
+    }
+
+    private fun changerCouleurYeux(cle: String) {
+        prefs.yeuxCouleur = cle
+        binding.yeuxBarre.appliquerReglages()
+        binding.logoAccueil.appliquerReglages()
+        binding.logoAccueil.reagir()
+        appliquerCouleurPerso()
+    }
+
+    private fun majAvatar() {
+        val prenom = OutilsActivity.prenom(this).trim()
+        binding.avatar.text = prenom.firstOrNull()?.uppercaseChar()?.toString() ?: "👤"
+    }
+
+    private fun menuProfil() {
+        val prenom = OutilsActivity.prenom(this).ifBlank { "Profil" }
+        val choix = arrayOf("✏️ Mon prénom", "👀 Les yeux", "🧠 Modèles IA installés", "⚙️ Réglages", "🔄 Mise à jour")
+        MaterialAlertDialogBuilder(this)
+            .setTitle("👤 $prenom")
+            .setItems(choix) { _, i ->
+                when (i) {
+                    0 -> OutilsActivity.demanderPrenom(this) { majAvatar() }
+                    1 -> choisirCouleurYeux()
+                    2 -> afficherModelesInstalles()
+                    3 -> openSettings()
+                    4 -> checkUpdates()
+                }
+            }
+            .show()
+    }
+
+    /** Les modèles IA déjà installés sur le téléphone ; un appui choisit celui à utiliser. */
+    private fun afficherModelesInstalles() {
+        val modeles = ModelStore.list(this)
+        val dossier = ModelStore.modelsDir(this).absolutePath
+        if (modeles.isEmpty()) {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("🧠 Modèles IA installés")
+                .setMessage("Aucun modèle installé pour l'instant.\n\nDossier lu :\n$dossier\n\nTélécharge une IA gratuite dans les Réglages, ou copie un fichier .gguf dans ce dossier.")
+                .setPositiveButton("⬇️ Télécharger une IA") { _, _ -> openSettings() }
+                .setNegativeButton("Fermer", null)
+                .show()
+            return
+        }
+        val cfg = prefs.config()
+        val actuel = modeles.indexOfFirst { it.absolutePath == cfg.localModelPath && cfg.provider == ProviderType.LOCAL }
+        val noms = modeles.map { f ->
+            val taille = f.length() / (1024.0 * 1024.0)
+            val texte = if (taille >= 1024) String.format(Locale.CANADA_FRENCH, "%.1f Go", taille / 1024) else String.format(Locale.CANADA_FRENCH, "%.0f Mo", taille)
+            f.name.removeSuffix(".gguf").removeSuffix(".GGUF") + "  ·  " + texte
+        }.toTypedArray()
+        MaterialAlertDialogBuilder(this)
+            .setTitle("🧠 Modèles IA installés (${modeles.size})")
+            .setSingleChoiceItems(noms, actuel) { d, i ->
+                if (isGenerating) return@setSingleChoiceItems
+                prefs.provider = ProviderType.LOCAL
+                prefs.localModelPath = modeles[i].absolutePath
+                refreshStatus()
+                Toast.makeText(this, "IA choisie : " + modeles[i].name, Toast.LENGTH_SHORT).show()
+                d.dismiss()
+            }
+            .setPositiveButton("⬇️ Ajouter") { _, _ -> openSettings() }
+            .setNegativeButton("Fermer", null)
+            .show()
     }
 
     /** APK perso : un modèle partagé est là mais aucun n'est choisi → on prend le premier. */
@@ -611,10 +818,7 @@ class MainActivity : AppCompatActivity() {
         MaterialAlertDialogBuilder(this)
             .setTitle("👀 Couleur des yeux")
             .setSingleChoiceItems(choix.map { it.nom }.toTypedArray(), actuel) { d, i ->
-                prefs.yeuxCouleur = choix[i].cle
-                binding.yeuxBarre.appliquerReglages()
-                binding.logoAccueil.appliquerReglages()
-                binding.logoAccueil.reagir()
+                changerCouleurYeux(choix[i].cle)
                 d.dismiss()
             }
             .show()
@@ -1157,8 +1361,16 @@ class MainActivity : AppCompatActivity() {
 
         if (!BuildConfig.PERSO) nouveaux.add(DrawerItem.Bouton(getString(R.string.drawer_studio), CLE_STUDIO))
         if (BuildConfig.PERSO) {
+            // Tous les menus de l'appli, au même endroit.
+            nouveaux.add(DrawerItem.Section("Menu"))
+            nouveaux.add(DrawerItem.Bouton("💬 Nouvelle discussion", CLE_NOUVELLE_SESSION))
             nouveaux.add(DrawerItem.Bouton("📅 Agenda", CLE_AGENDA))
-            nouveaux.add(DrawerItem.Bouton("🧰 Outils", CLE_OUTILS))
+            nouveaux.add(DrawerItem.Bouton("🧰 Outils · nouvelles, météo, recherche", CLE_OUTILS))
+            nouveaux.add(DrawerItem.Bouton("🧠 Modèles IA installés", CLE_MODELES))
+            nouveaux.add(DrawerItem.Bouton("👀 Les yeux · modèle et couleur", CLE_YEUX))
+            nouveaux.add(DrawerItem.Bouton("👤 Mon prénom", CLE_PRENOM))
+            nouveaux.add(DrawerItem.Bouton("⚙️ Réglages", CLE_REGLAGES))
+            nouveaux.add(DrawerItem.Bouton("🔄 Vérifier les mises à jour", CLE_MAJ))
         }
         nouveaux.add(
             DrawerItem.Section(
@@ -1273,6 +1485,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun surActionTiroir(item: DrawerItem) {
+        if (item is DrawerItem.Bouton) binding.drawerLayout.closeDrawers()
         val cle = when (item) {
             is DrawerItem.Section -> item.cleAction
             is DrawerItem.Bouton -> item.cleAction
@@ -1286,6 +1499,11 @@ class MainActivity : AppCompatActivity() {
             cle == CLE_STUDIO -> ouvrirStudio()
             cle == CLE_AGENDA -> startActivity(Intent(this, AgendaActivity::class.java))
             cle == CLE_OUTILS -> startActivity(Intent(this, OutilsActivity::class.java))
+            cle == CLE_MODELES -> afficherModelesInstalles()
+            cle == CLE_YEUX -> choisirCouleurYeux()
+            cle == CLE_PRENOM -> OutilsActivity.demanderPrenom(this) { majAvatar() }
+            cle == CLE_REGLAGES -> openSettings()
+            cle == CLE_MAJ -> checkUpdates()
             cle == CLE_OUVRIR_DOSSIER -> choisirDossier.launch(null)
             cle == CLE_SUPPRIMER_SESSIONS -> choisirSessionsASupprimer()
             cle == CLE_SUPPRIMER_PROJETS -> choisirProjetsASupprimer()
@@ -1948,6 +2166,11 @@ class MainActivity : AppCompatActivity() {
         private const val CLE_STUDIO = "studio"
         private const val CLE_AGENDA = "agenda"
         private const val CLE_OUTILS = "outils"
+        private const val CLE_MODELES = "modeles"
+        private const val CLE_YEUX = "yeux"
+        private const val CLE_PRENOM = "prenom"
+        private const val CLE_REGLAGES = "reglages"
+        private const val CLE_MAJ = "maj"
         private const val CLE_OUVRIR_DOSSIER = "ouvrir_dossier"
         private const val CLE_SUPPRIMER_SESSIONS = "supprimer_sessions"
         private const val CLE_SUPPRIMER_PROJETS = "supprimer_projets"

@@ -28,6 +28,11 @@ internal object ChatWindowInsets {
             binding.panneauEquipe.isVisible =
                 binding.panneauEquipe.tag == true && !(landscape && typing)
             binding.input.maxLines = if (!typing) 6 else if (landscape) 2 else 3
+            // TVA LexOS : la barre d'onglets se cache pendant qu'on écrit.
+            if (binding.barreOnglets.childCount > 0) {
+                binding.barreOnglets.isVisible = !typing
+                binding.ligneOnglets.isVisible = !typing
+            }
             // This screen handles insets once; descendants must not add them again.
             WindowInsetsCompat.CONSUMED
         }
