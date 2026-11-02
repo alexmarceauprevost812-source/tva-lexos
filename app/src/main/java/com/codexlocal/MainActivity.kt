@@ -1589,6 +1589,10 @@ class MainActivity : AppCompatActivity() {
                         user.envoi = (user.envoi ?: user.content) + "\n\n" + AgendaStore.contexte(this@MainActivity)
                         carteAgenda = AgendaStore.carte(this@MainActivity)
                     }
+                    // « Télécharge https://… » : le fichier part dans Téléchargements (gestionnaire Android).
+                    telechargerLiens(text)?.let { note ->
+                        user.envoi = (user.envoi ?: user.content) + "\n\n" + note
+                    }
                     // Recherche riche : web, actualités, météo, vidéos, marché crypto (avec l'accord donné).
                     if (prefs.rechercheWebAuto && OutilsActivity.rechercheRiche(this@MainActivity)) {
                         binding.status.text = "🔎 Recherche riche en cours…"
@@ -1651,6 +1655,35 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Si le message demande de télécharger un lien donné par l'utilisateur, le gestionnaire de
+     * téléchargements d'Android s'en charge (dossier Téléchargements, notification à la fin).
+     * Retourne une note pour l'IA, ou null.
+     */
+    private fun telechargerLiens(texte: String): String? {
+        if (!regexMots("\\b(télécharge\\w*|telecharge\\w*|download\\w*|enregistre\\w*)\\b", true).containsMatchIn(texte)) return null
+        val liens = RechercheRiche.liensDuMessage(texte).take(3)
+        if (liens.isEmpty()) return null
+        val gestionnaire = getSystemService(android.app.DownloadManager::class.java) ?: return null
+        val noms = liens.mapNotNull { lien ->
+            runCatching {
+                val nom = android.webkit.URLUtil.guessFileName(lien, null, null)
+                gestionnaire.enqueue(
+                    android.app.DownloadManager.Request(android.net.Uri.parse(lien))
+                        .setTitle(nom)
+                        .setDescription("TVA LexOS")
+                        .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                        .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, nom)
+                )
+                nom
+            }.getOrNull()
+        }
+        if (noms.isEmpty()) return null
+        Toast.makeText(this, "⬇️ Téléchargement lancé : " + noms.joinToString(", "), Toast.LENGTH_LONG).show()
+        return "Note de l'application : le téléchargement de " + noms.joinToString(", ") +
+            " a été lancé dans le dossier Téléchargements du téléphone. Confirme-le simplement à l'utilisateur."
     }
 
     private fun afficherErreur(message: String) {
