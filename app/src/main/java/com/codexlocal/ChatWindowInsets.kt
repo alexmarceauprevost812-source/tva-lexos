@@ -42,6 +42,23 @@ internal object ChatWindowInsets {
                 width = if (compact) android.view.ViewGroup.LayoutParams.WRAP_CONTENT else android.view.ViewGroup.LayoutParams.MATCH_PARENT
                 gravity = android.view.Gravity.BOTTOM
             }
+            // En compact, marges et remplissages réduits : la boîte tient sur une ligne mince.
+            val d = binding.root.resources.displayMetrics.density
+            fun px(v: Int) = (v * d).toInt()
+            boite.layoutParams = (boite.layoutParams as android.view.ViewGroup.MarginLayoutParams).apply {
+                topMargin = px(if (compact) 2 else 8)
+                bottomMargin = px(if (compact) 2 else 10)
+            }
+            if (compact) boite.setPadding(px(6), px(2), px(6), px(2))
+            else boite.setPadding(px(10), px(6), px(10), px(10))
+            val vertical = px(if (compact) 4 else 10)
+            binding.input.setPadding(px(10), vertical, px(10), vertical)
+            binding.input.minHeight = px(if (compact) 40 else 52)
+            binding.input.textSize = if (compact) 15f else 17f
+            val bouton = px(if (compact) 40 else 48)
+            for (v in listOf(binding.btnPlus, binding.send)) {
+                v.layoutParams = v.layoutParams.apply { width = bouton; height = bouton }
+            }
             // TVA LexOS : la barre d'onglets se cache pendant qu'on écrit.
             if (binding.barreOnglets.childCount > 0) {
                 binding.barreOnglets.isVisible = !typing
