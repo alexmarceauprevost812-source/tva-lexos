@@ -81,6 +81,8 @@ internal object ReseauRiche {
         var courant = url
         repeat(5) {
             require(pagePublique(courant)) { "Lien non permis (https public seulement)" }
+            // Un nom de domaine peut pointer vers le réseau local : on vérifie aussi les adresses.
+            require(adressesPubliques(URI(courant).host)) { "Lien non permis (réseau local)" }
             val connexion = URL(courant).openConnection() as HttpURLConnection
             try {
                 connexion.connectTimeout = 10_000
@@ -119,6 +121,18 @@ internal object ReseauRiche {
         }
         error("Trop de redirections")
     }
+
+    /** Toutes les adresses du nom sont publiques (pas de bouclage, réseau local, lien local…). */
+    private fun adressesPubliques(hote: String): Boolean = runCatching {
+        val adresses = java.net.InetAddress.getAllByName(hote)
+        adresses.isNotEmpty() && adresses.none { a ->
+            a.isLoopbackAddress || a.isSiteLocalAddress || a.isLinkLocalAddress || a.isAnyLocalAddress ||
+                a.isMulticastAddress ||
+                (a is java.net.Inet6Address && (a.address[0].toInt() and 0xFE) == 0xFC) ||        // fc00::/7
+                (a is java.net.Inet4Address && (a.address[0].toInt() and 0xFF) == 100 &&
+                    (a.address[1].toInt() and 0xC0) == 64)                                          // 100.64.0.0/10
+        }
+    }.getOrDefault(false)
 
     /** https vers un nom de domaine public (pas localhost, pas une adresse IP privée). */
     fun pagePublique(url: String): Boolean = runCatching {

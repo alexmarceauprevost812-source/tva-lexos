@@ -1664,6 +1664,8 @@ class MainActivity : AppCompatActivity() {
      */
     private fun telechargerLiens(texte: String): String? {
         if (!regexMots("\\b(télécharge\\w*|telecharge\\w*|download\\w*|enregistre\\w*)\\b", true).containsMatchIn(texte)) return null
+        // « sans internet » dans le message, ou Internet désactivé : aucun téléchargement.
+        if (!prefs.rechercheWebAuto || RechercheRiche.estHorsLigne(texte)) return null
         val liens = RechercheRiche.liensDuMessage(texte).take(3)
         if (liens.isEmpty()) return null
         val gestionnaire = getSystemService(android.app.DownloadManager::class.java) ?: return null

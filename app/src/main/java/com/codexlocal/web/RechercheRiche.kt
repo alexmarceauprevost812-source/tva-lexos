@@ -167,12 +167,23 @@ object RechercheRiche {
 
     // --------------------------------------------------------------- liens donnés
 
-    private val motifLien = Regex("https://[^\\s<>\"'()\\[\\]]{4,500}")
+    private val motifLien = Regex("https://[^\\s<>\"'\\[\\]]{4,500}")
 
     /** Les liens https écrits par l'utilisateur dans son message. */
     internal fun liensDuMessage(message: String): List<String> =
-        motifLien.findAll(message).map { it.value.trimEnd('.', ',', ';', ':', '!', '?', '»') }
+        motifLien.findAll(message).map { nettoyerLien(it.value) }
             .filter { ReseauRiche.pagePublique(it) }.distinct().toList()
+
+    /** Enlève la ponctuation finale, et une « ) » de trop (texte entre parenthèses), mais garde Paris_(Texas). */
+    internal fun nettoyerLien(brut: String): String {
+        var lien = brut
+        while (true) {
+            val avant = lien
+            lien = lien.trimEnd('.', ',', ';', ':', '!', '?', '»')
+            if (lien.endsWith(")") && lien.count { it == ')' } > lien.count { it == '(' }) lien = lien.dropLast(1)
+            if (lien == avant) return lien
+        }
+    }
 
     private fun pageWeb(lien: String): Bloc? {
         val (finale, type, brut) = ReseauRiche.chargerPage(lien)
