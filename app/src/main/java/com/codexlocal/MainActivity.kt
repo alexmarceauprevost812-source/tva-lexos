@@ -228,6 +228,7 @@ class MainActivity : AppCompatActivity() {
         if (BuildConfig.PERSO) {
             appliquerCouleurPerso()
             majAvatar()
+            matinAutomatique()
         }
         refreshStatus()
         verifierProjetActif()
@@ -883,6 +884,74 @@ class MainActivity : AppCompatActivity() {
         rafraichirTiroir()
     }
 
+    // ------------------------------------------------ Jasette (comme le Ti-Labo)
+
+    private var animRecherche: Job? = null
+
+    /** 🔎 Animation sobre dans la ligne d'état pendant une recherche web. */
+    private fun rechercheAnimee(libelle: String) {
+        animRecherche?.cancel()
+        animRecherche = com.codexlocal.chat.AnimRecherche.demarrer(lifecycleScope, binding.status, libelle)
+    }
+
+    private fun finRecherche() {
+        animRecherche?.cancel()
+        animRecherche = null
+    }
+
+    private fun demandeMatin(texte: String): Boolean {
+        val t = texte.lowercase(Locale.ROOT)
+        return t.contains("nouvelles du matin") || (t.length <= 60 && MOTS_MATIN.containsMatchIn(t))
+    }
+
+    /** ☀️ Nouvelles du matin dans le chat : salutation, météo avec émojis et manchettes du jour. */
+    private fun afficherMatin() {
+        if (isGenerating) return
+        if (!prefs.rechercheWebAuto) {
+            Toast.makeText(this, "Active la recherche Internet dans les Réglages pour les nouvelles du matin", Toast.LENGTH_LONG).show()
+            return
+        }
+        val reponse = Message.assistant("")
+        messages.add(reponse)
+        adapter.notifyItemInserted(messages.size - 1)
+        updateEmptyState()
+        scrollToEnd()
+        setGenerating(true)
+        rechercheAnimee("Nouvelles du matin")
+        job = lifecycleScope.launch {
+            try {
+                val ville = getSharedPreferences("codexlocal", MODE_PRIVATE).getString("villeMeteo", null)
+                reponse.content = RechercheRiche.carteMatin(ville, OutilsActivity.prenom(this@MainActivity))
+            } catch (e: CancellationException) {
+                if (reponse.content.isBlank()) reponse.content = "⏹️ Nouvelles du matin arrêtées."
+                throw e
+            } catch (e: Throwable) {
+                reponse.content = "📰 Nouvelles du matin indisponibles : ${e.message ?: e}"
+            } finally {
+                finRecherche()
+                adapter.notifyItemChanged(messages.indexOf(reponse).coerceAtLeast(0))
+                setGenerating(false)
+                refreshStatus()
+                sauverSession()
+                rafraichirTiroir()
+                scrollToEnd()
+            }
+        }
+    }
+
+    /** Une fois par jour, entre 5 h et 11 h, à l'ouverture sur une conversation vide. */
+    private fun matinAutomatique() {
+        if (messages.isNotEmpty() || isGenerating || !prefs.rechercheWebAuto) return
+        if (!OutilsActivity.rechercheRiche(this)) return
+        val heure = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        if (heure !in 5..10) return
+        val sp = getSharedPreferences("codexlocal", MODE_PRIVATE)
+        val aujourdhui = java.text.SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(java.util.Date())
+        if (sp.getString("dernierMatin", null) == aujourdhui) return
+        sp.edit().putString("dernierMatin", aujourdhui).apply()
+        afficherMatin()
+    }
+
     private fun sauverSession() {
         val s = session ?: return
         s.messages.clear()
@@ -1177,7 +1246,7 @@ class MainActivity : AppCompatActivity() {
     private fun menuPlus() {
         if (BuildConfig.PERSO) {
             // TVA LexOS : menu rapide (pas de projets de code).
-            val choix = arrayOf("📅 Agenda", "🧰 Outils", "👀 Les yeux", "🔊 Écouter les nouvelles", "🔄 Mise à jour", "🆕 Nouvelle conversation")
+            val choix = arrayOf("📅 Agenda", "🧰 Outils", "👀 Les yeux", "🔊 Écouter les nouvelles", "🔄 Mise à jour", "🆕 Nouvelle conversation", "☀️ Nouvelles du matin")
             MaterialAlertDialogBuilder(this)
                 .setItems(choix) { _, i ->
                     when (i) {
@@ -1195,6 +1264,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         4 -> checkUpdates()
+                        6 -> afficherMatin()
                         else -> nouvelleSession()
                     }
                 }
@@ -1364,6 +1434,7 @@ class MainActivity : AppCompatActivity() {
             // Tous les menus de l'appli, au même endroit.
             nouveaux.add(DrawerItem.Section("Menu"))
             nouveaux.add(DrawerItem.Bouton("💬 Nouvelle discussion", CLE_NOUVELLE_SESSION))
+            nouveaux.add(DrawerItem.Bouton("☀️ Nouvelles du matin", CLE_MATIN))
             nouveaux.add(DrawerItem.Bouton("📅 Agenda", CLE_AGENDA))
             nouveaux.add(DrawerItem.Bouton("🧰 Outils · nouvelles, météo, recherche", CLE_OUTILS))
             nouveaux.add(DrawerItem.Bouton("🧠 Modèles IA installés", CLE_MODELES))
@@ -1493,6 +1564,7 @@ class MainActivity : AppCompatActivity() {
         }
         when {
             cle == CLE_NOUVELLE_SESSION -> nouvelleSession()
+            cle == CLE_MATIN -> afficherMatin()
             cle == CLE_NOUVEAU_PROJET -> dialogNouveauProjet()
             cle == CLE_NOUVEAU_FICHIER -> dialogNouveauFichier()
             cle == CLE_NOUVEAU_DOSSIER -> dialogNouveauDossier()
@@ -1518,6 +1590,14 @@ class MainActivity : AppCompatActivity() {
         val mode = prefs.assistantMode
         if (mode == AssistantMode.REA && prefs.reaUrl.isBlank()) {
             configurerRea()
+            return
+        }
+        if (BuildConfig.PERSO && mode == AssistantMode.CHAT && demandeMatin(text)) {
+            binding.input.setText("")
+            messages.add(Message.user(text))
+            adapter.notifyItemInserted(messages.size - 1)
+            updateEmptyState()
+            afficherMatin()
             return
         }
         val baseConfig = prefs.config().forMode(mode)
@@ -1559,7 +1639,7 @@ class MainActivity : AppCompatActivity() {
             try {
                 val requeteWeb = if (prefs.rechercheWebAuto) RechercheWeb.requete(text) else null
                 if (requeteWeb != null) {
-                    binding.status.text = getString(R.string.web_recherche)
+                    rechercheAnimee("Recherche sur le web")
                     val resultat = try {
                         RechercheWeb.rechercher(requeteWeb)
                     } catch (e: CancellationException) {
@@ -1573,7 +1653,7 @@ class MainActivity : AppCompatActivity() {
                 // Prix d'une crypto demandé : cours en direct + logo, donnés à l'IA et affichés en carte.
                 val idCrypto = if (prefs.rechercheWebAuto) MoteurCrypto.detecter(text) else null
                 if (idCrypto != null) {
-                    binding.status.text = getString(R.string.crypto_recherche)
+                    rechercheAnimee("Cours en direct")
                     cours = try {
                         MoteurCrypto.obtenir(idCrypto)
                     } catch (e: CancellationException) {
@@ -1595,7 +1675,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     // Recherche riche : web, actualités, météo, vidéos, marché crypto (avec l'accord donné).
                     if (prefs.rechercheWebAuto && OutilsActivity.rechercheRiche(this@MainActivity)) {
-                        binding.status.text = "🔎 Recherche riche en cours…"
+                        rechercheAnimee("Recherche web, images et nouvelles")
                         val sp = getSharedPreferences("codexlocal", MODE_PRIVATE)
                         riche = try {
                             RechercheRiche.rechercher(text, cours != null, sp.getString("villeMeteo", null)) { v ->
@@ -1611,6 +1691,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                finRecherche()
                 binding.status.text = getString(R.string.ia_travaille)
                 if (mode == AssistantMode.EQUIPE) {
                     jouerEquipe(user, cfg, annulations)
@@ -1622,6 +1703,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Throwable) {
                 afficherErreur(e.message ?: e.toString())
             } finally {
+                finRecherche()
                 val reponse = messages.lastOrNull()
                 // Les cartes et annotations ne doivent jamais fermer l'appli si l'une d'elles échoue.
                 if (reponse != null && !reponse.isUser) runCatching {
@@ -2215,6 +2297,8 @@ class MainActivity : AppCompatActivity() {
         private const val CLE_STUDIO = "studio"
         private const val CLE_AGENDA = "agenda"
         private const val CLE_OUTILS = "outils"
+        private const val CLE_MATIN = "matin"
+        private val MOTS_MATIN = Regex("\\b(nouvelles du matin|bon matin|mon matin|mon briefing|r[ée]sum[ée] du matin)\\b")
         private const val CLE_MODELES = "modeles"
         private const val CLE_YEUX = "yeux"
         private const val CLE_PRENOM = "prenom"

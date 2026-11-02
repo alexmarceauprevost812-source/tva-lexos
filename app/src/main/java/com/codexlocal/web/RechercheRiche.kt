@@ -352,6 +352,33 @@ object RechercheRiche {
         lireRss(ReseauRiche.charger("https://news.google.com/rss?hl=fr-CA&gl=CA&ceid=CA:fr"), max)
             .map { Triple(it.titre.removeSuffix(" - ${it.source}"), it.lien, it.source) }
 
+    /**
+     * ☀️ Nouvelles du matin (comme le Ti-Labo) : salutation, météo de la ville retenue et
+     * manchettes du jour, en une seule carte pour le chat. Sans ville retenue, un conseil la remplace.
+     */
+    suspend fun carteMatin(ville: String?, prenom: String): String = withContext(Dispatchers.IO) {
+        coroutineScope {
+            val ciel = async { ville?.let { runCatching { meteo(it) }.getOrNull() } }
+            val actu = async { runCatching { actualites("") }.getOrNull() }
+            val heure = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            val salut = when (heure) { in 4..11 -> "☀️ Bon matin"; in 12..17 -> "🌤️ Bon après-midi"; else -> "🌙 Bonsoir" }
+            val date = SimpleDateFormat("EEEE d MMMM", Locale.CANADA_FRENCH).format(java.util.Date())
+            buildString {
+                append("**").append(salut)
+                if (prenom.isNotBlank()) append(", ").append(md(prenom))
+                append(" !** · ").append(date).append("\n\n")
+                val m = ciel.await()
+                when {
+                    m != null -> append(m.carte).append("\n\n")
+                    ville == null -> append("🌡️ Dis-moi « météo à *ta ville* » une fois et je la mettrai ici chaque matin.\n\n")
+                    else -> append("🌡️ Météo indisponible pour le moment.\n\n")
+                }
+                append(actu.await()?.carte ?: "📰 Nouvelles indisponibles pour le moment (vérifie la connexion).")
+                append("\n\n✨ Bonne journée !")
+            }
+        }
+    }
+
     private suspend fun actualites(q: String): Bloc? {
         val url = if (q.isBlank()) "https://news.google.com/rss?hl=fr-CA&gl=CA&ceid=CA:fr"
         else "https://news.google.com/rss/search?hl=fr-CA&gl=CA&ceid=CA:fr&q=" + enc(q)
