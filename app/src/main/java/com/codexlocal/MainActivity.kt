@@ -1346,7 +1346,7 @@ class MainActivity : AppCompatActivity() {
                         RechercheWeb.rechercher(requeteWeb)
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (_: Exception) {
+                    } catch (_: Throwable) {
                         ResultatWeb(requeteWeb, emptyList(), indisponible = true)
                     }
                     user.envoi = user.content + "\n\n" + resultat.contexte()
@@ -1360,7 +1360,7 @@ class MainActivity : AppCompatActivity() {
                         MoteurCrypto.obtenir(idCrypto)
                     } catch (e: CancellationException) {
                         throw e
-                    } catch (_: Exception) {
+                    } catch (_: Throwable) {
                         null
                     }
                     cours?.let { user.envoi = (user.envoi ?: user.content) + "\n\n" + it.contexte() }
@@ -1381,7 +1381,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         } catch (e: CancellationException) {
                             throw e
-                        } catch (_: Exception) {
+                        } catch (_: Throwable) {
                             null
                         }
                         riche?.takeIf { it.blocs.isNotEmpty() }?.let {
@@ -1397,11 +1397,12 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 afficherErreur(e.message ?: e.toString())
             } finally {
                 val reponse = messages.lastOrNull()
-                if (reponse != null && !reponse.isUser) {
+                // Les cartes et annotations ne doivent jamais fermer l'appli si l'une d'elles échoue.
+                if (reponse != null && !reponse.isUser) runCatching {
                     // Actions d'agenda et schémas : seulement en mode Chat (jamais pendant du code).
                     if (BuildConfig.PERSO && mode == AssistantMode.CHAT) {
                         SchemaAnime.annoter(reponse)
@@ -1954,7 +1955,7 @@ class MainActivity : AppCompatActivity() {
 }
 
 /** Demandes de lecture à voix haute (APK perso). */
-private val LIRE_A_VOIX = Regex("(?U)\\b(lis-moi|lis moi|lis-les|lis les|lire à voix|à voix haute|a voix haute|écouter|ecouter|dis-moi à voix)")
+private val LIRE_A_VOIX = regexMots("\\b(lis-moi|lis moi|lis-les|lis les|lire à voix|à voix haute|a voix haute|écouter|ecouter|dis-moi à voix)")
 
 /** Mise en forme vivante du mode Chat : émojis, liens et logos dans les réponses. */
 private const val CONSIGNE_CHAT_RICHE =

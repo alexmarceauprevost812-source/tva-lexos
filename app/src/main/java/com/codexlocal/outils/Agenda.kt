@@ -1,5 +1,7 @@
 package com.codexlocal.outils
 
+import com.codexlocal.regexMots
+
 import android.Manifest
 import android.app.AlarmManager
 import android.app.AlertDialog
@@ -101,7 +103,7 @@ object AgendaStore {
     // ------------------------------------------------------- lien avec le chat
 
     private val format = SimpleDateFormat("EEEE d MMMM yyyy 'à' HH:mm", Locale.CANADA_FRENCH)
-    private val motsAgenda = Regex("(?iU)\\b(agenda|calendrier|rendez-vous|rdv|planifi\\w*|planning|horaire|mon temps|ma semaine|cette semaine|demain|organise\\w*)\\b")
+    private val motsAgenda = regexMots(ignorerCasse = true, motif = "\\b(agenda|calendrier|rendez-vous|rdv|planifi\\w*|planning|horaire|mon temps|ma semaine|cette semaine|demain|organise\\w*)\\b")
     private val ligneAjout = Regex("(?m)^\\s*AGENDA\\+\\s*(\\d{4}-\\d{2}-\\d{2})\\s+(\\d{1,2}:\\d{2})\\s*\\|\\s*(.+?)\\s*$")
 
     private val ligneSuggestion = Regex("(?m)^\\s*AGENDA\\?\\s*(\\d{4}-\\d{2}-\\d{2})\\s+(\\d{1,2}:\\d{2})\\s*\\|\\s*(.+?)\\s*$")

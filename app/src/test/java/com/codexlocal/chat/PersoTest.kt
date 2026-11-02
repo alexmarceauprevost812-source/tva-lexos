@@ -1,5 +1,7 @@
 package com.codexlocal.chat
 
+import com.codexlocal.regexMots
+
 import android.net.Uri
 import com.codexlocal.Message
 import com.codexlocal.outils.DateTexte
@@ -27,7 +29,7 @@ class PersoTest {
     }
 
     @Test fun sujetSansMotsDeclencheurs() {
-        val sujet = RechercheRiche.sujet("montre-moi des vidéos de recettes de tourtière", Regex("(?U)\\b(vidéos?)\\b"))
+        val sujet = RechercheRiche.sujet("montre-moi des vidéos de recettes de tourtière", regexMots("\\b(vidéos?)\\b"))
         assertTrue(sujet, sujet.contains("recettes") && sujet.contains("tourtière") && !sujet.contains("vidéo"))
     }
 

@@ -1,5 +1,7 @@
 package com.codexlocal.web
 
+import com.codexlocal.regexMots
+
 import android.text.Html
 import android.util.Xml
 import com.codexlocal.Message
@@ -62,13 +64,12 @@ object RechercheRiche {
 
     // --------------------------------------------------------------- détection
 
-    private val horsLigne = Regex("(?U)\\b(sans internet|hors ligne|sans recherche|pas de recherche|offline)\\b")
-    private val motsMeteo = Regex("(?U)\\b(météo|meteo|température|temperature|prévisions?|previsions?|il fait (beau|froid|chaud)|va-t-il pleuvoir|pluie|neige|weather)\\b")
-    private val motsActu = Regex("(?U)\\b(actualit\\w*|nouvelles?|news|manchettes?|quoi de neuf|dernière heure|derniere heure|info du jour|infos?)\\b")
-    private val motsVideo = Regex("(?U)\\b(vidéos?|videos?|youtube|tutos?|tutoriels?|clips?)\\b")
-    private val motsCryptoMarche = Regex("(?U)\\b(cryptos|cryptomonnaies?|crypto-monnaies?|marché crypto|marche crypto|top crypto|cours crypto)\\b")
-    private val motsRecherche = Regex(
-        "(?U)(\\?|\\b(cherche|recherche|trouve|google|c'est quoi|c est quoi|qu'est-ce|qu est-ce|qui est|qui a|quand|où|combien|comment|pourquoi|quel|quelle|quels|quelles|explique|parle-moi|infos? sur|search)\\b)"
+    private val horsLigne = regexMots("\\b(sans internet|hors ligne|sans recherche|pas de recherche|offline)\\b")
+    private val motsMeteo = regexMots("\\b(météo|meteo|température|temperature|prévisions?|previsions?|il fait (beau|froid|chaud)|va-t-il pleuvoir|pluie|neige|weather)\\b")
+    private val motsActu = regexMots("\\b(actualit\\w*|nouvelles?|news|manchettes?|quoi de neuf|dernière heure|derniere heure|info du jour|infos?)\\b")
+    private val motsVideo = regexMots("\\b(vidéos?|videos?|youtube|tutos?|tutoriels?|clips?)\\b")
+    private val motsCryptoMarche = regexMots("\\b(cryptos|cryptomonnaies?|crypto-monnaies?|marché crypto|marche crypto|top crypto|cours crypto)\\b")
+    private val motsRecherche = regexMots("(\\?|\\b(cherche|recherche|trouve|google|c'est quoi|c est quoi|qu'est-ce|qu est-ce|qui est|qui a|quand|où|combien|comment|pourquoi|quel|quelle|quels|quelles|explique|parle-moi|infos? sur|search)\\b)"
     )
     private val vides = setOf(
         "le", "la", "les", "un", "une", "des", "de", "du", "d", "l", "à", "a", "au", "aux", "et", "ou", "en", "sur",
@@ -91,7 +92,7 @@ object RechercheRiche {
     /** Ville demandée : « météo à Normandin », « la météo de Québec demain »… */
     internal fun ville(message: String): String? {
         val texte = message.replace(Regex("[?!.,;:]"), " ")
-        val m = Regex("(?iU)\\b(?:à|a|au|aux|de|pour|sur|in|at)\\s+([\\p{Lu}\\p{Ll}][\\p{L}'’ -]{1,40})").findAll(texte).lastOrNull()
+        val m = regexMots(ignorerCasse = true, motif = "\\b(?:à|a|au|aux|de|pour|sur|in|at)\\s+([\\p{Lu}\\p{Ll}][\\p{L}'’ -]{1,40})").findAll(texte).lastOrNull()
             ?: return null
         val coupe = m.groupValues[1].split(Regex("\\s+"))
             .takeWhile { it.lowercase(Locale.ROOT) !in setOf("demain", "aujourd'hui", "aujourdhui", "ce", "cette", "la", "le", "les", "svp", "stp", "maintenant", "today", "tomorrow", "semaine", "soir", "matin", "fin") }
@@ -142,7 +143,7 @@ object RechercheRiche {
                 lancer { marcheCrypto() }
             }
             if (!special && !cryptoDejaTraitee && motsRecherche.containsMatchIn(texte)) {
-                val q = sujet(message, Regex("(?U)\\b(cherche|recherche|trouve|google|search)\\b"))
+                val q = sujet(message, regexMots("\\b(cherche|recherche|trouve|google|search)\\b"))
                 if (q.isNotBlank()) {
                     lancer { wikipedia(q) }
                     lancer { web(q) }
