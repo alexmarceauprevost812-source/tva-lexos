@@ -1,5 +1,7 @@
 package com.codexlocal.chat
 
+import com.codexlocal.regexMots
+
 /**
  * Mini-émojis dans le texte du chat : l'IA (ou l'utilisateur) peut écrire un code
  * comme `:fusee:` ou `:feu:` et il devient 🚀 ou 🔥. Les codes inconnus restent tels quels.
@@ -54,7 +56,7 @@ object EmojisChat {
         "chien|chat|vétérinaire|animal" to "🐾", "ménage|nettoyer|lavage" to "🧹", "facture|payer|paiement|loyer" to "🧾",
         "lire|livre|note|écrire" to "📝", "québec|montréal|saguenay|lac-saint-jean" to "⚜️", "guerre|armée|conflit" to "🕊️",
         "environnement|climat|forêt|nature" to "🌲",
-    ).map { (motif, emoji) -> Regex("(?iU)\\b(?:$motif)") to emoji }
+    ).map { (motif, emoji) -> regexMots(ignorerCasse = true, motif = "\\b(?:$motif)") to emoji }
 
     fun pourSujet(titre: String, defaut: String): String =
         SUJETS.firstOrNull { it.first.containsMatchIn(titre) }?.second ?: defaut
