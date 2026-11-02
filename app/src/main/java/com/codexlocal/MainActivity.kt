@@ -899,10 +899,7 @@ class MainActivity : AppCompatActivity() {
         animRecherche = null
     }
 
-    private fun demandeMatin(texte: String): Boolean {
-        val t = texte.lowercase(Locale.ROOT)
-        return t.contains("nouvelles du matin") || (t.length <= 60 && MOTS_MATIN.containsMatchIn(t))
-    }
+    private fun demandeMatin(texte: String) = RechercheRiche.demandeMatin(texte)
 
     /** ☀️ Nouvelles du matin dans le chat : salutation, météo avec émojis et manchettes du jour. */
     private fun afficherMatin() {
@@ -2298,7 +2295,6 @@ class MainActivity : AppCompatActivity() {
         private const val CLE_AGENDA = "agenda"
         private const val CLE_OUTILS = "outils"
         private const val CLE_MATIN = "matin"
-        private val MOTS_MATIN = Regex("\\b(nouvelles du matin|bon matin|mon matin|mon briefing|r[ée]sum[ée] du matin)\\b")
         private const val CLE_MODELES = "modeles"
         private const val CLE_YEUX = "yeux"
         private const val CLE_PRENOM = "prenom"

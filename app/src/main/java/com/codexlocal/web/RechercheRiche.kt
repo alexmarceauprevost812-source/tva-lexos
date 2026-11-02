@@ -82,6 +82,24 @@ object RechercheRiche {
 
     fun estHorsLigne(message: String) = horsLigne.containsMatchIn(message.lowercase(Locale.ROOT))
 
+    private val nonLettres = Regex("[^\\p{L}\\p{N}'\\s-]")
+    private val espaces = Regex("\\s+")
+    private val matinSeul = Regex(
+        "^(?:(?:donne|montre)(?:-moi)? )?(?:(?:les|mes) )?" +
+            "(?:nouvelles du matin|bon matin|mon matin|mon briefing|r[ée]sum[ée] du matin)" +
+            "(?: (?:stp|svp|toi|tout le monde))?$"
+    )
+
+    /**
+     * ☀️ Vrai seulement pour une demande dédiée (« Bon matin ! », « nouvelles du matin stp ») :
+     * « Bon matin, explique les fractions » reste une vraie question, et « sans internet » est respecté.
+     */
+    fun demandeMatin(message: String): Boolean {
+        if (estHorsLigne(message)) return false
+        val t = message.lowercase(Locale.ROOT).replace(nonLettres, " ").replace(espaces, " ").trim()
+        return matinSeul.matches(t)
+    }
+
     /** Le sujet d'une demande, sans les mots déclencheurs ni les petits mots. */
     internal fun sujet(message: String, declencheur: Regex): String {
         val sans = declencheur.replace(message.lowercase(Locale.ROOT), " ")
