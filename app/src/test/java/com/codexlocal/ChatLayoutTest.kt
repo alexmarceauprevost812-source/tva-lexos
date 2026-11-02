@@ -63,7 +63,8 @@ class ChatLayoutTest {
         val rect = bounds(b, b.chatContent)
         assertEquals(840, rect.width())
         assertEquals(1200, rect.left + rect.right)
-        assertEquals(976, bounds(b, b.send).bottom + 8)
+        // Boîte de saisie : 10 px de marge sous la boîte + 10 px de remplissage sous le bouton envoyer.
+        assertEquals(976, bounds(b, b.send).bottom + 20)
     }
 
     @Test fun landscapeCutoutAndKeyboardDoNotHideComposer() {

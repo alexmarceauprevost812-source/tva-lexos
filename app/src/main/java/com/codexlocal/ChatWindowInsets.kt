@@ -28,6 +28,20 @@ internal object ChatWindowInsets {
             binding.panneauEquipe.isVisible =
                 binding.panneauEquipe.tag == true && !(landscape && typing)
             binding.input.maxLines = if (!typing) 6 else if (landscape) 2 else 3
+            // Paysage + clavier : ＋ et envoyer passent sur la même ligne que le texte,
+            // pour laisser de la place aux messages.
+            val compact = typing && landscape
+            val boite = binding.boiteSaisie
+            val rangee = binding.send.parent as android.view.View
+            boite.orientation = if (compact) android.widget.LinearLayout.HORIZONTAL else android.widget.LinearLayout.VERTICAL
+            binding.input.layoutParams = (binding.input.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                width = if (compact) 0 else android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                weight = if (compact) 1f else 0f
+            }
+            rangee.layoutParams = (rangee.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                width = if (compact) android.view.ViewGroup.LayoutParams.WRAP_CONTENT else android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                gravity = android.view.Gravity.BOTTOM
+            }
             // TVA LexOS : la barre d'onglets se cache pendant qu'on écrit.
             if (binding.barreOnglets.childCount > 0) {
                 binding.barreOnglets.isVisible = !typing
