@@ -1668,24 +1668,38 @@ class MainActivity : AppCompatActivity() {
         if (!prefs.rechercheWebAuto || RechercheRiche.estHorsLigne(texte)) return null
         val liens = RechercheRiche.liensDuMessage(texte).take(3)
         if (liens.isEmpty()) return null
-        val gestionnaire = getSystemService(android.app.DownloadManager::class.java) ?: return null
-        val noms = liens.mapNotNull { lien ->
+        val noms = liens.map { android.webkit.URLUtil.guessFileName(it, null, null) }
+        // Rien ne part sans un « oui » : « ne télécharge pas … » ou « explique comment télécharger … »
+        // ne doivent jamais lancer un téléchargement tout seuls.
+        MaterialAlertDialogBuilder(this)
+            .setTitle("⬇️ Télécharger ?")
+            .setMessage(
+                liens.indices.joinToString("\n\n") { "📄 " + noms[it] + "\n" + liens[it] } +
+                    "\n\nLe fichier ira dans le dossier Téléchargements."
+            )
+            .setPositiveButton("Télécharger") { _, _ -> lancerTelechargements(liens, noms) }
+            .setNegativeButton("Annuler", null)
+            .show()
+        return "Note de l'application : un bouton pour télécharger " + noms.joinToString(", ") +
+            " (dans Téléchargements) est proposé à l'utilisateur. Ne prétends pas que le téléchargement est terminé."
+    }
+
+    private fun lancerTelechargements(liens: List<String>, noms: List<String>) {
+        val gestionnaire = getSystemService(android.app.DownloadManager::class.java) ?: return
+        val lances = liens.indices.mapNotNull { i ->
             runCatching {
-                val nom = android.webkit.URLUtil.guessFileName(lien, null, null)
                 gestionnaire.enqueue(
-                    android.app.DownloadManager.Request(android.net.Uri.parse(lien))
-                        .setTitle(nom)
+                    android.app.DownloadManager.Request(android.net.Uri.parse(liens[i]))
+                        .setTitle(noms[i])
                         .setDescription("TVA LexOS")
                         .setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                        .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, nom)
+                        .setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, noms[i])
                 )
-                nom
+                noms[i]
             }.getOrNull()
         }
-        if (noms.isEmpty()) return null
-        Toast.makeText(this, "⬇️ Téléchargement lancé : " + noms.joinToString(", "), Toast.LENGTH_LONG).show()
-        return "Note de l'application : le téléchargement de " + noms.joinToString(", ") +
-            " a été lancé dans le dossier Téléchargements du téléphone. Confirme-le simplement à l'utilisateur."
+        val message = if (lances.isEmpty()) "Téléchargement impossible" else "⬇️ Téléchargement lancé : " + lances.joinToString(", ")
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
     private fun afficherErreur(message: String) {
