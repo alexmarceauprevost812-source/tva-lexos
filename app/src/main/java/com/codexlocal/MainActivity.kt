@@ -901,11 +901,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun demandeMatin(texte: String) = RechercheRiche.demandeMatin(texte)
 
+    /** La carte du matin va sur Internet : il faut la recherche web ET l'accord pour la recherche riche. */
+    private fun matinPermis() = prefs.rechercheWebAuto && OutilsActivity.rechercheRiche(this)
+
     /** ☀️ Nouvelles du matin dans le chat : salutation, météo avec émojis et manchettes du jour. */
     private fun afficherMatin() {
         if (isGenerating) return
         if (!prefs.rechercheWebAuto) {
             Toast.makeText(this, "Active la recherche Internet dans les Réglages pour les nouvelles du matin", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!OutilsActivity.rechercheRiche(this)) {
+            if (!OutilsActivity.accordDemande(this)) OutilsActivity.demanderAccordRecherche(this)
+            else Toast.makeText(this, "Active la recherche riche dans Outils pour les nouvelles du matin", Toast.LENGTH_LONG).show()
             return
         }
         val reponse = Message.assistant("")
@@ -1589,7 +1597,7 @@ class MainActivity : AppCompatActivity() {
             configurerRea()
             return
         }
-        if (BuildConfig.PERSO && mode == AssistantMode.CHAT && demandeMatin(text)) {
+        if (BuildConfig.PERSO && mode == AssistantMode.CHAT && matinPermis() && demandeMatin(text)) {
             binding.input.setText("")
             messages.add(Message.user(text))
             adapter.notifyItemInserted(messages.size - 1)
